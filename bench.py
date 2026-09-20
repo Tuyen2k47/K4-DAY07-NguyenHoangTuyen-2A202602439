@@ -16,6 +16,7 @@ from src import (
     FixedSizeChunker,
     GeminiEmbedder,
     LocalEmbedder,
+    OllamaEmbedder,
     OpenAIEmbedder,
     RecursiveChunker,
     SentenceChunker,
@@ -216,6 +217,8 @@ def build_embedder(provider: str) -> tuple[Callable[[str], list[float]], str]:
         embedder = GeminiEmbedder()
     elif provider == "mock":
         embedder = _mock_embed
+    elif provider == "ollama":
+        embedder = OllamaEmbedder(model_name=os.getenv("OLLAMA_EMBEDDING_MODEL", "qwen2.5:3b"))
     else:
         raise ValueError(f"Unsupported embedding provider: {provider}")
     return embedder, getattr(embedder, "_backend_name", embedder.__class__.__name__)
@@ -336,7 +339,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--data-dir", type=Path, default=DATA_DIR)
     parser.add_argument(
         "--provider",
-        choices=("local", "mock", "openai", "gemini"),
+        choices=("local", "mock", "openai", "gemini", "ollama"),
         default=os.getenv("EMBEDDING_PROVIDER", "local").strip().lower(),
     )
     parser.add_argument("--top-k", type=int, default=3)

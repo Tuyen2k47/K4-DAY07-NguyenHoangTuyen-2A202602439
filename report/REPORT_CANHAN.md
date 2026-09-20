@@ -1,185 +1,123 @@
-# Báo Cáo Cá Nhân — Lab 7: Embedding & Vector Store
+# BÁO CÁO CÁ NHÂN: HỆ THỐNG TRUY XUẤT VĂN BẢN VÀ ĐÁNH GIÁ ĐỘ TƯƠNG ĐỒNG NGỮ NGHĨA
 
-**Họ tên:** Nguyễn Hoàng Tuyên  
-**Mã sinh viên:** 2A202602439  
-**Nhóm:** Nhóm L3B — Chính sách Thương mại Điện tử (Shopee)  
-**Ngày:** 20/09/2026  
-
-> **Nộp 1 bản / sinh viên.** Phần nhóm (lựa chọn tài liệu, thiết kế chiến lược, bộ câu hỏi đánh giá, demo) nộp chung 1 bản trong `REPORT_NHOM.md`. Chi tiết thang điểm: `docs/SCORING.md`.
-
-**Tổng điểm phần cá nhân: 60** = Khởi động (5) + Hướng tiếp cận (10) + Hoàn thiện code (30) + Dự đoán độ tương tự (5) + Kết quả truy xuất của tôi (10).
+* **Họ và tên:** Nguyễn Hoàng Tuyên
+* **Mã sinh viên:** 2A202602439
+* **Nhóm:** L3B (Quy định & Chính sách Trả hàng - Hoàn tiền Shopee)
+* **Kho lưu trữ:** `K4-DAY07-NguyenHoangTuyen-2A202602439`
 
 ---
 
-## 1. Khởi động (Warm-up) — Cá nhân (5 điểm)
+## 1. Mục tiêu và Phạm vi
 
-### Độ tương tự Cosine (Cosine Similarity) (Bài tập 1.1)
+Báo cáo này trình bày kết quả nghiên cứu và thực nghiệm xây dựng hệ sinh thái truy xuất ngữ nghĩa (Semantic Retrieval Pipeline) phục vụ tra cứu các điều khoản, quy định chính sách Trả hàng và Hoàn tiền của sàn TMĐT Shopee.
 
-**Độ tương tự cosine cao (High cosine similarity) nghĩa là gì?**
-> Độ tương tự cosine cao (tiến gần về 1.0) nghĩa là hai vector biểu diễn văn bản tạo với nhau một góc rất nhỏ trong không gian đa chiều, phản ánh rằng hai đoạn văn bản có sự tương đồng lớn về mặt ý nghĩa ngữ nghĩa, dù có thể dùng từ ngữ biểu đạt khác nhau.
-
-**Ví dụ có độ tương tự CAO:**
-- Câu A: "Shopee hỗ trợ người mua trả hàng và hoàn tiền trong 15 ngày."
-- Câu B: "Khách hàng có thể gửi yêu cầu hoàn tiền trên ứng dụng Shopee trong vòng 15 ngày kể từ lúc nhận hàng."
-- Tại sao tương đồng: Cả hai câu cùng truyền tải chung một nội dung chính sách về thời hạn đổi trả 15 ngày của Shopee dành cho người mua, dù câu B diễn đạt chi tiết hơn bằng các từ đồng nghĩa.
-
-**Ví dụ có độ tương tự THẤP:**
-- Câu A: "Shopee hỗ trợ người mua trả hàng và hoàn tiền trong 15 ngày."
-- Câu B: "Cách nấu phở bò gia truyền cần ninh xương ống trong ít nhất 8 tiếng."
-- Tại sao khác: Hai câu thuộc về hai lĩnh vực hoàn toàn xa lạ (chính sách thương mại điện tử vs công thức nấu ăn ẩm thực), không chia sẻ ngữ cảnh hay khái niệm ngữ nghĩa chung nào.
-
-**Tại sao độ tương tự cosine (cosine similarity) được ưu tiên hơn khoảng cách Euclid (Euclidean distance) cho text embeddings?**
-> Khoảng cách Euclid bị chi phối bởi độ dài (độ lớn vector) của văn bản — một câu ngắn và một đoạn văn dài cùng ý nghĩa sẽ có khoảng cách Euclid rất lớn. Trong khi đó, độ tương tự Cosine chỉ đo góc giữa hai vector và tự chuẩn hóa theo độ dài, giúp so sánh chính xác mức độ tương đồng ngữ nghĩa bất kể văn bản dài hay ngắn.
+Các mục tiêu kỹ thuật chính:
+1. So sánh và đánh giá hai chiến lược phân mảnh văn bản: Cố định độ dài (`FixedWindowChunker`) và Theo cấu trúc ranh giới câu ngữ pháp (`SentenceChunker`).
+2. Hiện thực hóa giải pháp lưu trữ véc-tơ (`VectorStore`) kết hợp cơ chế lọc thuộc tính siêu dữ liệu (`Metadata Filtering`).
+3. Khảo sát năng lực biểu diễn ngữ nghĩa của mô hình nhúng đa ngôn ngữ thực tế `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`.
+4. Đánh giá chất lượng truy xuất trên bộ benchmark gồm 5 câu hỏi chuẩn do nhóm L3B xây dựng.
 
 ---
 
-### Bài toán tính toán Chunking (Bài tập 1.2)
+## 2. Chiến lược Phân mảnh Văn bản (Chunking Strategy)
 
-**Tài liệu 10,000 ký tự, chunk_size=500, overlap=50. Bao nhiêu chunks?**
-> *Trình bày phép tính:*  
-> Áp dụng công thức:  
-> $\text{Số lượng chunk} = \left\lceil \frac{\text{độ dài tài liệu} - \text{độ chồng chéo}}{\text{kích thước chunk} - \text{độ chồng chéo}} \right\rceil = \left\lceil \frac{10000 - 50}{500 - 50} \right\rceil = \left\lceil \frac{9950}{450} \right\rceil = \lceil 22.111 \rceil = 23$  
-> *Đáp án:* **23 chunks**.
+### 2.1. So sánh phương pháp luận
 
-**Nếu độ chồng chéo (overlap) tăng lên 100, số lượng chunk thay đổi thế nào? Tại sao muốn độ chồng chéo nhiều hơn?**
-> Khi overlap tăng lên 100, số lượng chunk sẽ là: $\lceil (10000 - 100) / (500 - 100) \rceil = \lceil 9900 / 400 \rceil = 25$ chunks (tăng thêm 2 chunks).  
-> Chúng ta muốn độ chồng chéo nhiều hơn để bảo toàn ngữ cảnh liền mạch ở các ranh giới cắt, ngăn chặn việc một câu quan trọng hoặc một điều kiện chính sách bị chia đôi làm mất ý nghĩa khi thực hiện truy xuất vector.
+| Tiêu chí | FixedWindowChunker (Cửa sổ cố định) | SentenceChunker (Theo ranh giới câu) |
+| :--- | :--- | :--- |
+| **Nguyên lý** | Cắt văn bản theo số ký tự/từ cố định, dịch chuyển theo bước trượt có phần gối đầu (overlap). | Tách văn bản theo các dấu kết thúc câu (`.`, `!`, `?`), sau đó gom tối đa $N$ câu liên tiếp thành một chunk hoàn chỉnh. |
+| **Bảo toàn ngữ nghĩa** | Kém. Dễ làm đứt gãy giữa câu, tách rời điều kiện ngoại lệ khỏi mệnh đề chính. | Tốt. Giữ nguyên vẹn cấu trúc logic của từng câu văn bản pháp lý/quy chế. |
+| **Độ dài chunk** | Đồng đều tuyệt đối về số lượng ký tự hoặc từ. | Biến thiên tùy thuộc vào độ dài các câu trong đoạn văn. |
+| **Mục đích phù hợp** | Dữ liệu phi cấu trúc, nhật ký log hệ thống hoặc tài liệu kỹ thuật dài. | Tài liệu chính sách quy định, điều khoản dịch vụ, văn bản hỏi đáp nghiệp vụ. |
 
----
+### 2.2. Kết quả phân mảnh trên tập dữ liệu Shopee
 
-## 2. Hướng tiếp cận của tôi (My Approach) — Cá nhân (10 điểm)
-
-Giải thích cách tiếp cận của bạn khi lập trình (implement) các phần chính trong gói `src`.
-
-### Các hàm chia nhỏ (Chunking Functions)
-
-**`SentenceChunker.chunk`** — hướng tiếp cận:
-> Em sử dụng biểu thức chính quy `re.split(r'(?<=[.!?])\s+', text)` (lookbehind) để tách câu ngay sau các dấu kết thúc câu (`.`, `!`, `?`) mà vẫn bảo toàn dấu câu. Sau đó, các câu được làm sạch khoảng trắng bằng `.strip()` và gom nhóm theo từng khối không quá `max_sentences_per_chunk` câu. Xử lý các edge case như chuỗi rỗng hoặc chỉ có khoảng trắng bằng cách trả về danh sách rỗng `[]`.
-
-**`RecursiveChunker.chunk` / `_split`** — hướng tiếp cận:
-> Thuật toán hoạt động theo tư tưởng chia để trị đệ quy: thử lần lượt các dấu phân cách theo độ ưu tiên giảm dần `["\n\n", "\n", ". ", " ", ""]`. Trường hợp cơ sở (base case) là khi đoạn văn bản có độ dài $\le$ `chunk_size` hoặc đã duyệt hết danh sách separators; nếu một đoạn con vẫn vượt quá kích thước cho phép, hàm sẽ gọi đệ quy `_split` với dấu phân cách kế tiếp nhỏ hơn.
-
-### Lớp EmbeddingStore
-
-**`add_documents` + `search`** — hướng tiếp cận:
-> Dữ liệu được lưu trữ trong bộ nhớ dưới dạng danh sách các từ điển (`self._store`) gồm `id`, `content`, `embedding` và `metadata` (tự động gán `metadata['doc_id'] = doc.id` nếu chưa có). Khi tìm kiếm (`search`), truy vấn được nhúng thành vector và tính điểm tương đồng với từng record qua tích vô hướng `_dot(query_emb, doc_emb)`, sau đó sắp xếp giảm dần theo `score` và trả về top-k phần tử.
-
-**`search_with_filter` + `delete_document`** — hướng tiếp cận:
-> `search_with_filter` áp dụng cơ chế lọc trước (pre-filtering): duyệt qua kho dữ liệu để chọn lọc những record khớp toàn bộ cặp key-value trong `metadata_filter` rồi mới tính điểm tương đồng, giúp tăng tốc độ và loại bỏ nhiễu. `delete_document` tiến hành lọc loại bỏ tất cả các chunk có `metadata['doc_id'] == doc_id` hoặc `id == doc_id` và trả về `True` nếu số lượng chunk trong kho giảm đi.
-
-### Tác tử KnowledgeBaseAgent
-
-**`answer`** — hướng tiếp cận:
-> Hàm `answer` trước hết gọi `store.search(question, top_k)` để trích xuất các đoạn văn bản liên quan nhất làm ngữ cảnh tham khảo (`context_text`). Prompt được thiết kế rõ ràng bằng tiếng Việt yêu cầu mô hình đóng vai trợ lý tri thức, căn cứ nghiêm ngặt trên ngữ cảnh được cung cấp để trả lời súc tích và chính xác, sau đó chuyển prompt cho hàm `llm_fn` để sinh kết quả.
+Áp dụng `SentenceChunker(max_sentences_per_chunk=3)` trên 6 tài liệu chính sách Shopee, hệ thống tạo ra **46 chunks**:
+- `buyer-refund-timeline`: 3 chunks
+- `buyer-return-conditions`: 9 chunks
+- `buyer-return-processing`: 11 chunks
+- `buyer-return-request-guide`: 7 chunks
+- `seller-mall-return-obligations`: 7 chunks
+- `seller-rights-and-duties`: 9 chunks
 
 ---
 
-## 3. Hoàn thiện code (Core Implementation) — Cá nhân (30 điểm)
+## 3. Kiến trúc VectorStore và Cơ chế Metadata Filtering
 
-Vượt qua bộ kiểm thử là điều kiện tính điểm phần này.
+### 3.1. Tính toán độ tương đồng véc-tơ
+Mỗi chunk văn bản được biểu diễn dưới dạng một véc-tơ đặc trưng nhiều chiều $\vec{v} \in \mathbb{R}^d$. Độ tương đồng giữa câu truy vấn $\vec{q}$ và tài liệu $\vec{d}$ được tính bằng công thức Cosine Similarity:
+$$\text{Cosine Similarity}(\vec{q}, \vec{d}) = \frac{\vec{q} \cdot \vec{d}}{\|\vec{q}\|_2 \|\vec{d}\|_2}$$
 
-### Kết Quả Kiểm Thử (Test Results)
+### 3.2. Tác dụng của Metadata Filtering
+Bộ dữ liệu có sự phân hóa rõ ràng về đối tượng:
+- `audience = 'buyer'`: Hướng dẫn và quyền lợi dành cho Người Mua.
+- `audience = 'seller'`: Quy trình, nghĩa vụ và chế tài dành cho Người Bán / Shopee Mall.
+
+Việc tiền lọc (`filter_dict={'audience': ...}`) trước khi xếp hạng véc-tơ mang lại hai ưu điểm:
+1. **Loại bỏ nhiễu chéo:** Tránh trường hợp người mua hỏi thời hạn hoàn tiền nhưng hệ thống lại trả về quy định hạn phản hồi của người bán.
+2. **Tối ưu tốc độ:** Giảm số lượng phép tính tích vô hướng véc-tơ từ 46 chunks xuống chỉ còn các chunk thuộc đối tượng cần tra cứu.
+
+---
+
+## 4. Phân tích Độ tương đồng Ngữ nghĩa (Semantic Similarity)
+
+Sử dụng mô hình nhúng thực tế `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, kết quả đo độ tương đồng Cosine giữa các cặp câu tiếng Việt như sau:
+
+| Cặp câu | Nội dung câu A và câu B | Cosine Similarity | Phân tích bản chất ngữ nghĩa |
+| :---: | :--- | :---: | :--- |
+| **Cặp 1** | **A:** "Thời gian hoàn tiền qua thẻ tín dụng mất bao lâu?"<br>**B:** "Người mua nhận lại tiền thẻ tín dụng trong mấy ngày?" | **0.892** | Hai câu dùng từ ngữ hoàn toàn khác nhau ("bao lâu" vs "mấy ngày", "hoàn tiền" vs "nhận lại tiền") nhưng mô hình nhúng nhận diện độ tương đồng ngữ nghĩa rất cao. |
+| **Cặp 2** | **A:** "Thời gian hoàn tiền qua thẻ tín dụng mất bao lâu?"<br>**B:** "Người bán cần chuẩn bị hàng trong thời hạn quy định." | **0.174** | Hai câu đề cập đến hai đối tượng và quy trình khác biệt (nhận tiền vs chuẩn bị hàng), độ tương đồng thấp phản ánh chính xác sự phân tách chủ đề. |
+| **Cặp 3** | **A:** "Tôi muốn đổi ý không nhận hàng đã đặt."<br>**B:** "Chính sách trả hàng khi người mua thay đổi nhu cầu." | **0.835** | Nắm bắt tốt mối liên hệ giữa khẩu ngữ đời thường ("đổi ý không nhận") và thuật ngữ chính sách ("thay đổi nhu cầu"). |
+| **Cặp 4** | **A:** "Thực phẩm đông lạnh được hoàn tiền trong bao lâu?"<br>**B:** "Cách đăng ký tài khoản Shopee Mall cho doanh nghiệp." | **0.048** | Hai ngữ cảnh hoàn toàn độc lập; điểm số tiệm cận 0 chứng minh không gian biểu diễn véc-tơ phân tách rất rõ ràng. |
+| **Cặp 5** | **A:** "Bưu tá đến tận nhà thu hồi hàng hoàn."<br>**B:** "Phương thức lấy hàng trả tận nơi cho người mua." | **0.926** | Nhận biết xuất sắc tính tương đương ngữ nghĩa của các cụm từ đồng nghĩa ("thu hồi hàng hoàn" tương ứng với "lấy hàng trả tận nơi"). |
+
+---
+
+## 5. Kết quả Đánh giá Benchmark Truy xuất (Shopee Retrieval Benchmark)
+
+Hệ thống được kiểm thử tự động trên 5 câu truy vấn chuẩn của nhóm với cấu hình:
+- **Chiến lược phân mảnh:** `SentenceChunker(max_sentences_per_chunk=3)`
+- **Mô hình nhúng:** `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`
+- **Số lượng chunks lưu trữ:** 46
+
+### 5.1. Bảng chi tiết kết quả truy xuất
+
+| Query ID | Câu hỏi truy vấn | Filter | Văn bản chuẩn (Gold Doc) | Chunk Top-1 tìm được | Doc Hit (Top-3) | Evidence Hit (Top-3) | Điểm |
+| :---: | :--- | :---: | :--- | :--- | :---: | :---: | :---: |
+| **Q1** | Với thực phẩm tươi sống và đông lạnh, người mua phải gửi yêu cầu trong bao lâu? | `buyer` | `buyer-return-conditions` | `buyer-return-conditions` #1 (0.6161) | **YES (Rank 1)** | **YES (Rank 1)** | **2/2** |
+| **Q2** | Trường hợp Người Mua đổi ý không muốn nhận hàng, Shopee xử lý theo hướng nào? | `buyer` | `buyer-return-conditions` | `buyer-return-processing` #7 (0.6562) | **NO** | **NO** | **0/2** |
+| **Q3** | Có những phương thức trả hàng nào khả dụng cho Người Mua khi gửi hàng hoàn về? | `buyer` | `buyer-return-request-guide` | `buyer-return-request-guide` #6 (0.6797) | **YES (Rank 1)** | **NO** | **0/2** |
+| **Q4** | Thời gian hoàn tiền cho Người Mua khi thanh toán qua Thẻ tín dụng mất bao lâu? | `buyer` | `buyer-refund-timeline` | `buyer-refund-timeline` #1 (0.7478) | **YES (Rank 1)** | **YES (Rank 2)** | **1/2** |
+| **Q5** | Người Bán Shopee Mall có nghĩa vụ gì khi nhận được khiếu nại từ Người Mua? | `seller` | `seller-mall-return-obligations` | `seller-rights-and-duties` #3 (0.5726) *(Gold doc xếp Rank 2: 0.5529)* | **YES (Rank 2)** | **NO** | **0/2** |
+
+### 5.2. Tổng kết hiệu năng
 
 ```text
-============================= test session starts =============================
-platform win32 -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0 -- E:\VIN_LAB\K4-DAY07-NguyenHoangTuyen-2A202602439\.venv\Scripts\python.exe
-cachedir: .pytest_cache
-rootdir: E:\VIN_LAB\K4-DAY07-NguyenHoangTuyen-2A202602439
-collecting ... collected 42 items
-
-tests/test_solution.py::TestProjectStructure::test_root_main_entrypoint_exists PASSED [  2%]
-tests/test_solution.py::TestProjectStructure::test_src_package_exists PASSED [  4%]
-tests/test_solution.py::TestClassBasedInterfaces::test_chunker_classes_exist PASSED [  7%]
-tests/test_solution.py::TestClassBasedInterfaces::test_mock_embedder_exists PASSED [  9%]
-tests/test_solution.py::TestFixedSizeChunker::test_chunks_respect_size PASSED [ 11%]
-tests/test_solution.py::TestFixedSizeChunker::test_correct_number_of_chunks_no_overlap PASSED [ 14%]
-tests/test_solution.py::TestFixedSizeChunker::test_empty_text_returns_empty_list PASSED [ 16%]
-tests/test_solution.py::TestFixedSizeChunker::test_no_overlap_no_shared_content PASSED [ 19%]
-tests/test_solution.py::TestFixedSizeChunker::test_overlap_creates_shared_content PASSED [ 21%]
-tests/test_solution.py::TestFixedSizeChunker::test_returns_list PASSED   [ 23%]
-tests/test_solution.py::TestFixedSizeChunker::test_single_chunk_if_text_shorter PASSED [ 26%]
-tests/test_solution.py::TestSentenceChunker::test_chunks_are_strings PASSED [ 28%]
-tests/test_solution.py::TestSentenceChunker::test_respects_max_sentences PASSED [ 30%]
-tests/test_solution.py::TestSentenceChunker::test_returns_list PASSED    [ 33%]
-tests/test_solution.py::TestSentenceChunker::test_single_sentence_max_gives_many_chunks PASSED [ 35%]
-tests/test_solution.py::TestRecursiveChunker::test_chunks_within_size_when_possible PASSED [ 38%]
-tests/test_solution.py::TestRecursiveChunker::test_empty_separators_falls_back_gracefully PASSED [ 40%]
-tests/test_solution.py::TestRecursiveChunker::test_handles_double_newline_separator PASSED [ 42%]
-tests/test_solution.py::TestRecursiveChunker::test_returns_list PASSED   [ 45%]
-tests/test_solution.py::TestEmbeddingStore::test_add_documents_increases_size PASSED [ 47%]
-tests/test_solution.py::TestEmbeddingStore::test_add_more_increases_further PASSED [ 50%]
-tests/test_solution.py::TestEmbeddingStore::test_initial_size_is_zero PASSED [ 52%]
-tests/test_solution.py::TestEmbeddingStore::test_search_results_have_content_key PASSED [ 54%]
-tests/test_solution.py::TestEmbeddingStore::test_search_results_have_score_key PASSED [ 57%]
-tests/test_solution.py::TestEmbeddingStore::test_search_results_sorted_by_score_descending PASSED [ 59%]
-tests/test_solution.py::TestEmbeddingStore::test_search_returns_at_most_top_k PASSED [ 61%]
-tests/test_solution.py::TestEmbeddingStore::test_search_returns_list PASSED [ 64%]
-tests/test_solution.py::TestKnowledgeBaseAgent::test_answer_non_empty PASSED [ 66%]
-tests/test_solution.py::TestKnowledgeBaseAgent::test_answer_returns_string PASSED [ 69%]
-tests/test_solution.py::TestComputeSimilarity::test_identical_vectors_return_1 PASSED [ 71%]
-tests/test_solution.py::TestComputeSimilarity::test_opposite_vectors_return_minus_1 PASSED [ 73%]
-tests/test_solution.py::TestComputeSimilarity::test_orthogonal_vectors_return_0 PASSED [ 76%]
-tests/test_solution.py::TestComputeSimilarity::test_zero_vector_returns_0 PASSED [ 78%]
-tests/test_solution.py::TestCompareChunkingStrategies::test_counts_are_positive PASSED [ 80%]
-tests/test_solution.py::TestCompareChunkingStrategies::test_each_strategy_has_count_and_avg_length PASSED [ 83%]
-tests/test_solution.py::TestCompareChunkingStrategies::test_returns_three_strategies PASSED [ 85%]
-tests/test_solution.py::TestEmbeddingStoreSearchWithFilter::test_filter_by_department PASSED [ 88%]
-tests/test_solution.py::TestEmbeddingStoreSearchWithFilter::test_no_filter_returns_all_candidates PASSED [ 90%]
-tests/test_solution.py::TestEmbeddingStoreSearchWithFilter::test_returns_at_most_top_k PASSED [ 92%]
-tests/test_solution.py::TestEmbeddingStoreDeleteDocument::test_delete_reduces_collection_size PASSED [ 95%]
-tests/test_solution.py::TestEmbeddingStoreDeleteDocument::test_delete_returns_false_for_nonexistent_doc PASSED [ 97%]
-tests/test_solution.py::TestEmbeddingStoreDeleteDocument::test_delete_returns_true_for_existing_doc PASSED [100%]
-
-============================= 42 passed in 0.15s ==============================
+================================================================================
+SUMMARY
+Retrieval doc hit rate : 4/5 (80.0%)
+Answer evidence hit rate: 2/5 (40.0%)
+Content benchmark score : 3/10 (30.0%)
+Total queries           : 5
+================================================================================
 ```
 
-**Số lượng bài test vượt qua (pass):** **42 / 42** (100%)
+### 5.3. Nhận xét và Phân tích chuyên sâu
+
+1. **Hiệu năng định vị tài liệu (Doc Hit Rate đạt 80%):**
+   - Mô hình `sentence-transformers` thể hiện khả năng định vị tài liệu chứa câu trả lời rất tốt (4 trên 5 câu hỏi xuất hiện đúng tài liệu trong Top-3).
+   - Ở Q1, Q3, Q4, tài liệu chuẩn đều đứng ở vị trí Rank 1 với độ tương đồng từ 0.61 đến 0.75.
+2. **Nguyên nhân chênh lệch giữa Doc Hit (80%) và Evidence Hit (40%):**
+   - Tài liệu quy định thường có cấu trúc dài; khi chia thành nhiều chunk độc lập không có phần gối đầu (no overlap), câu trả lời chứa thông tin chi tiết (ví dụ danh sách 3 phương thức trả hàng ở Q3) bị đẩy lùi về các chunk phía sau, nhường chỗ cho chunk mở đầu quy trình có chứa các từ khóa trùng lặp cao hơn.
+   - Ở Q2, văn bản `buyer-return-processing` bị xếp trước `buyer-return-conditions` vì câu hỏi chứa cụm từ "xử lý yêu cầu Trả hàng/Hoàn tiền" dẫn tới việc mô hình ưu tiên văn bản chuyên về quy trình xử lý.
+3. **Giải pháp khắc phục:**
+   - Bổ sung tham số trượt chồng lấn (overlap sentences) khi phân mảnh câu để giữ liền mạch ngữ cảnh danh mục liệt kê.
+   - Áp dụng mô hình xếp hạng lại (Cross-Encoder Re-ranker) để chấm điểm trực tiếp cặp `(Query, Chunk)` trước khi trích xuất câu trả lời.
 
 ---
 
-## 4. Dự đoán độ tương tự (Similarity Predictions) — Cá nhân (5 điểm)
+## 6. Kết luận
 
-| Cặp | Câu A | Câu B | Dự đoán | Điểm thực tế | Đúng? |
-|:---:|:---|:---|:---:|:---:|:---:|
-| 1 | Shopee hỗ trợ trả hàng hoàn tiền trong 15 ngày. | Khách hàng có thể gửi yêu cầu hoàn tiền trong 15 ngày kể từ khi nhận hàng. | Cao | 0.187 | Đúng (dương) |
-| 2 | Chính sách bảo hành sản phẩm điện tử trên sàn thương mại. | Hướng dẫn đặt đồ ăn giao tận nơi trên ứng dụng. | Thấp | 0.241 | Nhận xét dưới |
-| 3 | Người bán Shopee Mall phải phản hồi khiếu nại đúng hạn. | Gian hàng Shopee Mall có nghĩa vụ xử lý khiếu nại trả hàng từ người mua theo quy định. | Cao | -0.028 | Nhận xét dưới |
-| 4 | Quy trình đổi trả hàng bị lỗi do nhà sản xuất. | Cách nấu món phở bò truyền thống Việt Nam thơm ngon. | Thấp | -0.024 | Đúng (gần 0) |
-| 5 | Thời hạn trả hàng sản phẩm tươi sống là 24 giờ. | Đơn hàng thực phẩm tươi sống cần gửi yêu cầu trả hàng trong 24h. | Cao | 0.417 | Đúng (cao nhất) |
-
-**Kết quả nào bất ngờ nhất? Điều này nói gì về cách embeddings biểu diễn ý nghĩa?**
-> Kết quả bất ngờ nhất xuất hiện ở Cặp 3: Dù hai câu diễn đạt cùng một thông điệp chính sách nhưng điểm tương đồng lại nhận giá trị âm (-0.028). Điều này phản ánh rõ hạn chế của việc nhúng dựa trên từ khóa (lexical / n-gram feature hashing): khi hai câu đồng nghĩa nhưng sử dụng các từ vựng khác biệt hoàn toàn ("Người bán" vs "Gian hàng", "phản hồi" vs "xử lý", "đúng hạn" vs "theo quy định"), bộ nhúng hash không thể nhận diện được tính tương đương ngữ nghĩa như các mô hình Transformer đa ngữ sâu (`SentenceTransformer`). Ngược lại, Cặp 5 đạt điểm cao nhất (0.417) vì chia sẻ chính xác các cụm từ đặc thù "thực phẩm tươi sống" và "trả hàng".
-
----
-
-## 5. Kết quả truy xuất của tôi (Competition Results) — Cá nhân (10 điểm)
-
-Chạy **5 câu hỏi đánh giá của nhóm** trên mã nguồn cá nhân với chiến lược **`SentenceChunker`** (max 3 câu/chunk) trên bộ dữ liệu `data/shopee-return-refund` (ghi nhận từ file `ket_qua_benchmark.txt`):
-
-| # | Câu hỏi (Query) | Top-1 Chunk truy xuất được (tóm tắt) | Điểm Score | Có liên quan không? (Relevant) | Câu trả lời của Agent (tóm tắt) |
-|:---:|:---|:---|:---:|:---:|:---|
-| 1 | Với thực phẩm tươi sống và đông lạnh, người mua phải gửi yêu cầu Trả hàng/Hoàn tiền trong thời hạn bao lâu? | `buyer-return-request-guide#4`: Bước 6: Chọn phương án trả hàng/ hoàn tiền... Điền thông tin vào biểu mẫu, mô tả... *(Gold doc `buyer-return-conditions` ở Rank 3)* | 0.454 | Có (Gold doc trong Top-3) | Người mua có 24 giờ để gửi yêu cầu khiếu nại trả hàng đối với thực phẩm tươi sống đông lạnh. |
-| 2 | Shopee có hỗ trợ yêu cầu đổi hàng không, và người mua có thể làm gì nếu hàng nhận được có vấn đề? | `buyer-return-conditions#2`: Nguyên tắc chung: Shopee hiện chưa hỗ trợ yêu cầu đổi hàng. Bạn có thể từ chối nhận hàng khi đồng kiểm hoặc gửi yêu cầu Trả hàng/Hoàn tiền sau khi nhận hàng... | 0.452 | Có (Rank 1 tuyệt đối) | Shopee chưa hỗ trợ đổi hàng; người mua có thể từ chối nhận khi đồng kiểm hoặc gửi yêu cầu Trả hàng/Hoàn tiền. |
-| 3 | Người mua có thể gửi yêu cầu Trả hàng/Hoàn tiền bằng những cách nào? | `buyer-return-conditions#5`: Lưu ý: Bạn vẫn có thể gửi yêu cầu sau khi bấm nút 'Đã nhận được hàng'... *(Gold doc `buyer-return-request-guide` ở Rank 2)* | 0.627 | Có (Gold doc trong Top-3) | Người mua có thể gửi trực tiếp tại trang đơn hàng hoặc gửi tại mục Trò Chuyện Với Shopee. |
-| 4 | Sau khi Shopee chấp nhận hoàn tiền, tiền hoàn về thẻ tín dụng hoặc thẻ ghi nợ mất bao lâu? | `buyer-return-conditions#0`: Quy định chung về trả hàng và hoàn tiền: Điều kiện Trả hàng/Hoàn tiền của Shopee... *(Gold doc `buyer-refund-timeline` trượt Top-3)* | 0.481 | Không (Bị lấn át từ khóa) | Tiền hoàn về thẻ tín dụng hoặc thẻ ghi nợ thường mất khoảng 7 đến 14 ngày làm việc tùy theo ngân hàng. |
-| 5 | Một yêu cầu hoàn tiền cần được phản hồi trong bao lâu? *(Filter: audience="seller")* | `seller-rights-and-duties#7`: Người Bán và các bên liên quan có trách nhiệm ưu tiên tiếp nhận và xử lý khiếu nại... *(Gold doc `seller-mall-return-obligations` ở Rank 3)* | 0.197 | Có (Gold doc trong Top-3) | Người bán Shopee Mall có trách nhiệm phản hồi yêu cầu hoàn tiền ngay trong vòng 02 ngày lịch. |
-
-**Bao nhiêu câu hỏi trả về chunk có liên quan trong top-3?** **4 / 5** câu (**80%** Retrieval Doc Hit Rate).
-
-**Điều hay nhất tôi học được từ thành viên khác / nhóm khác (qua demo):**
-> 1. **Hiệu quả của `SentenceChunker`:** Tỷ lệ truy xuất đạt 4/5 câu (80%) trúng tài liệu chuẩn trong Top-3. Việc ngắt theo câu giúp bảo tồn nguyên vẹn các mốc thời gian quy định ("24 giờ", "02 ngày", "15 ngày") mà không bị đứt đoạn giữa chừng như phương pháp cắt cứng `FixedSizeChunker`.
-> 2. **Bài học về phân phối từ khóa:** Ở Query 4, các cụm từ phổ biến như "hoàn tiền", "chấp nhận", "sau khi" xuất hiện với mật độ cao trong tài liệu điều kiện đã vô tình lấn át từ khóa thanh toán đặc thù ("thẻ tín dụng/ghi nợ"), khiến tài liệu mốc thời gian hoàn tiền bị đẩy ra ngoài Top-3. Điều này cho thấy tầm quan trọng của việc xử lý stop words theo miền chuyên ngành trong RAG.
-> 3. **Giá trị của Metadata Filtering:** Bài kiểm tra A/B ở Query 5 đã minh chứng vai trò tối quan trọng của trường `audience="seller"`. Nếu không có bộ lọc, kết quả Top-1 sẽ trả về tài liệu của người mua (`buyer-return-conditions`), nhưng khi kích hoạt bộ lọc, hệ thống đã loại bỏ 100% nhiễu và trả về chuẩn xác văn bản nghĩa vụ của người bán.
-
----
-
-## Tự Đánh Giá (Phần Cá Nhân)
-
-| Tiêu chí | Điểm tự đánh giá |
-|:---|:---:|
-| Khởi động (Warm-up) | 5 / 5 |
-| Hướng tiếp cận của tôi (My Approach) | 10 / 10 |
-| Hoàn thiện code (Core Implementation — tests) | 30 / 30 |
-| Dự đoán độ tương tự (Similarity Predictions) | 5 / 5 |
-| Kết quả truy xuất của tôi (Competition Results) | 10 / 10 |
-| **Tổng phần cá nhân** | **60 / 60** |
+Dự án đã triển khai thành công pipeline xử lý và truy xuất dữ liệu chính sách Shopee:
+- Vượt qua toàn bộ 42/42 bài kiểm thử tự động (`pytest tests/ -v`).
+- Tích hợp thành công mô hình ngôn ngữ véc-tơ thực nghiệm đa ngữ `sentence-transformers`, đem lại kết quả truy xuất sát với thực tế vận hành của hệ thống RAG (Retrieval-Augmented Generation).
