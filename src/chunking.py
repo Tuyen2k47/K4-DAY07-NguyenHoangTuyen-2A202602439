@@ -49,7 +49,7 @@ class SentenceChunker:
     def chunk(self, text: str) -> list[str]:
         if not text or not text.strip():
             return []
-        sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
+        sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+|\n{2,}', text) if s.strip()]
         if not sentences:
             return []
         chunks = []
