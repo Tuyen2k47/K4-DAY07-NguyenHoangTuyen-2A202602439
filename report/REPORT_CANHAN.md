@@ -141,33 +141,35 @@ tests/test_solution.py::TestEmbeddingStoreDeleteDocument::test_delete_returns_tr
 
 | Cặp | Câu A | Câu B | Dự đoán | Điểm thực tế | Đúng? |
 |:---:|:---|:---|:---:|:---:|:---:|
-| 1 | Shopee hỗ trợ trả hàng hoàn tiền trong 15 ngày. | Khách hàng có thể gửi yêu cầu hoàn tiền trong 15 ngày kể từ khi nhận hàng. | Cao | 0.892 | Đúng |
-| 2 | Chính sách bảo hành sản phẩm điện tử trên sàn thương mại. | Hướng dẫn đặt đồ ăn giao tận nơi trên ứng dụng. | Thấp | 0.174 | Đúng |
-| 3 | Người bán Shopee Mall phải phản hồi khiếu nại đúng hạn. | Gian hàng Shopee Mall có nghĩa vụ xử lý khiếu nại trả hàng từ người mua theo quy định. | Cao | 0.835 | Đúng |
-| 4 | Quy trình đổi trả hàng bị lỗi do nhà sản xuất. | Cách nấu món phở bò truyền thống Việt Nam thơm ngon. | Thấp | 0.048 | Đúng |
-| 5 | Thời hạn trả hàng sản phẩm tươi sống là 24 giờ. | Đơn hàng thực phẩm tươi sống cần gửi yêu cầu trả hàng trong 24h. | Cao | 0.926 | Đúng |
+| 1 | Shopee hỗ trợ trả hàng hoàn tiền trong 15 ngày. | Khách hàng có thể gửi yêu cầu hoàn tiền trong 15 ngày kể từ khi nhận hàng. | Cao | 0.187 | Đúng (dương) |
+| 2 | Chính sách bảo hành sản phẩm điện tử trên sàn thương mại. | Hướng dẫn đặt đồ ăn giao tận nơi trên ứng dụng. | Thấp | 0.241 | Nhận xét dưới |
+| 3 | Người bán Shopee Mall phải phản hồi khiếu nại đúng hạn. | Gian hàng Shopee Mall có nghĩa vụ xử lý khiếu nại trả hàng từ người mua theo quy định. | Cao | -0.028 | Nhận xét dưới |
+| 4 | Quy trình đổi trả hàng bị lỗi do nhà sản xuất. | Cách nấu món phở bò truyền thống Việt Nam thơm ngon. | Thấp | -0.024 | Đúng (gần 0) |
+| 5 | Thời hạn trả hàng sản phẩm tươi sống là 24 giờ. | Đơn hàng thực phẩm tươi sống cần gửi yêu cầu trả hàng trong 24h. | Cao | 0.417 | Đúng (cao nhất) |
 
 **Kết quả nào bất ngờ nhất? Điều này nói gì về cách embeddings biểu diễn ý nghĩa?**
-> Kết quả ở Cặp 1 và Cặp 5 đạt điểm rất cao (> 0.89) dù từ ngữ thay đổi ("hoàn tiền trong 15 ngày" vs "kể từ khi nhận hàng", "24 giờ" vs "24h"). Điều này chứng minh rằng mô hình Embedding không chỉ so khớp từ khóa rời rạc (lexical match) mà thực sự ánh xạ được cấu trúc ngữ nghĩa sâu (semantic representation), nhận biết được các thực thể số và ngữ cảnh đồng nghĩa trong tiếng Việt.
+> Kết quả bất ngờ nhất xuất hiện ở Cặp 3: Dù hai câu diễn đạt cùng một thông điệp chính sách nhưng điểm tương đồng lại nhận giá trị âm (-0.028). Điều này phản ánh rõ hạn chế của việc nhúng dựa trên từ khóa (lexical / n-gram feature hashing): khi hai câu đồng nghĩa nhưng sử dụng các từ vựng khác biệt hoàn toàn ("Người bán" vs "Gian hàng", "phản hồi" vs "xử lý", "đúng hạn" vs "theo quy định"), bộ nhúng hash không thể nhận diện được tính tương đương ngữ nghĩa như các mô hình Transformer đa ngữ sâu (`SentenceTransformer`). Ngược lại, Cặp 5 đạt điểm cao nhất (0.417) vì chia sẻ chính xác các cụm từ đặc thù "thực phẩm tươi sống" và "trả hàng".
 
 ---
 
 ## 5. Kết quả truy xuất của tôi (Competition Results) — Cá nhân (10 điểm)
 
-Chạy **5 câu hỏi đánh giá của nhóm** trên mã nguồn cá nhân với chiến lược **`SentenceChunker`** (max 3 câu/chunk) trên bộ dữ liệu `data/shopee-return-refund`:
+Chạy **5 câu hỏi đánh giá của nhóm** trên mã nguồn cá nhân với chiến lược **`SentenceChunker`** (max 3 câu/chunk) trên bộ dữ liệu `data/shopee-return-refund` (ghi nhận từ file `ket_qua_benchmark.txt`):
 
 | # | Câu hỏi (Query) | Top-1 Chunk truy xuất được (tóm tắt) | Điểm Score | Có liên quan không? (Relevant) | Câu trả lời của Agent (tóm tắt) |
 |:---:|:---|:---|:---:|:---:|:---|
-| 1 | Với thực phẩm tươi sống và đông lạnh, người mua phải gửi yêu cầu Trả hàng/Hoàn tiền trong thời hạn bao lâu? | `buyer-return-conditions`: Đối với đơn hàng giao thực phẩm tươi sống & đông lạnh (trừ lý do Chưa nhận được hàng): Trong vòng 24 giờ kể từ lúc đơn hàng được cập nhật trạng thái ‘Giao hàng thành công’... | 0.684 | Có | Người mua phải gửi yêu cầu Trả hàng/Hoàn tiền trong vòng 24 giờ kể từ khi đơn hàng giao thành công. |
-| 2 | Shopee có hỗ trợ yêu cầu đổi hàng không, và người mua có thể làm gì nếu hàng nhận được có vấn đề? | `buyer-return-conditions`: Nguyên tắc chung: Shopee hiện chưa hỗ trợ yêu cầu đổi hàng. Nếu hàng nhận được có vấn đề, bạn có thể từ chối nhận khi đồng kiểm hoặc gửi yêu cầu Trả hàng/Hoàn tiền... | 0.713 | Có | Shopee chưa hỗ trợ đổi hàng; người mua có thể từ chối nhận khi đồng kiểm hoặc gửi yêu cầu Trả hàng/Hoàn tiền. |
-| 3 | Người mua có thể gửi yêu cầu Trả hàng/Hoàn tiền bằng những cách nào? | `buyer-return-request-guide`: Cách 1: Gửi yêu cầu trực tiếp tại trang đơn hàng. Cách 2: Gửi yêu cầu tại mục Trò Chuyện Với Shopee... | 0.693 | Có | Người mua có thể gửi trực tiếp tại trang đơn hàng hoặc gửi tại mục Trò Chuyện Với Shopee. |
-| 4 | Sau khi Shopee chấp nhận hoàn tiền, tiền hoàn về thẻ tín dụng hoặc thẻ ghi nợ mất bao lâu? | `buyer-refund-timeline`: Thẻ tín dụng/ghi nợ: 7 - 14 ngày làm việc (tùy theo ngân hàng). Thẻ nội địa Napas: 2 - 5 ngày làm việc... | 0.742 | Có | Tiền hoàn về thẻ tín dụng hoặc thẻ ghi nợ sẽ mất từ 7 đến 14 ngày làm việc tùy ngân hàng. |
-| 5 | Một yêu cầu hoàn tiền cần được phản hồi trong bao lâu? *(Filter: audience="seller")* | `seller-mall-return-obligations`: Trường hợp hoàn tiền ngay: Người Bán Shopee Mall có trách nhiệm phản hồi yêu cầu hoàn tiền trong vòng 02 ngày lịch kể từ khi nhận được yêu cầu... | 0.685 | Có | Người bán Shopee Mall cần phản hồi yêu cầu hoàn tiền trong vòng 02 ngày lịch kể từ khi nhận yêu cầu. |
+| 1 | Với thực phẩm tươi sống và đông lạnh, người mua phải gửi yêu cầu Trả hàng/Hoàn tiền trong thời hạn bao lâu? | `buyer-return-request-guide#4`: Bước 6: Chọn phương án trả hàng/ hoàn tiền... Điền thông tin vào biểu mẫu, mô tả... *(Gold doc `buyer-return-conditions` ở Rank 3)* | 0.454 | Có (Gold doc trong Top-3) | Người mua có 24 giờ để gửi yêu cầu khiếu nại trả hàng đối với thực phẩm tươi sống đông lạnh. |
+| 2 | Shopee có hỗ trợ yêu cầu đổi hàng không, và người mua có thể làm gì nếu hàng nhận được có vấn đề? | `buyer-return-conditions#2`: Nguyên tắc chung: Shopee hiện chưa hỗ trợ yêu cầu đổi hàng. Bạn có thể từ chối nhận hàng khi đồng kiểm hoặc gửi yêu cầu Trả hàng/Hoàn tiền sau khi nhận hàng... | 0.452 | Có (Rank 1 tuyệt đối) | Shopee chưa hỗ trợ đổi hàng; người mua có thể từ chối nhận khi đồng kiểm hoặc gửi yêu cầu Trả hàng/Hoàn tiền. |
+| 3 | Người mua có thể gửi yêu cầu Trả hàng/Hoàn tiền bằng những cách nào? | `buyer-return-conditions#5`: Lưu ý: Bạn vẫn có thể gửi yêu cầu sau khi bấm nút 'Đã nhận được hàng'... *(Gold doc `buyer-return-request-guide` ở Rank 2)* | 0.627 | Có (Gold doc trong Top-3) | Người mua có thể gửi trực tiếp tại trang đơn hàng hoặc gửi tại mục Trò Chuyện Với Shopee. |
+| 4 | Sau khi Shopee chấp nhận hoàn tiền, tiền hoàn về thẻ tín dụng hoặc thẻ ghi nợ mất bao lâu? | `buyer-return-conditions#0`: Quy định chung về trả hàng và hoàn tiền: Điều kiện Trả hàng/Hoàn tiền của Shopee... *(Gold doc `buyer-refund-timeline` trượt Top-3)* | 0.481 | Không (Bị lấn át từ khóa) | Tiền hoàn về thẻ tín dụng hoặc thẻ ghi nợ thường mất khoảng 7 đến 14 ngày làm việc tùy theo ngân hàng. |
+| 5 | Một yêu cầu hoàn tiền cần được phản hồi trong bao lâu? *(Filter: audience="seller")* | `seller-rights-and-duties#7`: Người Bán và các bên liên quan có trách nhiệm ưu tiên tiếp nhận và xử lý khiếu nại... *(Gold doc `seller-mall-return-obligations` ở Rank 3)* | 0.197 | Có (Gold doc trong Top-3) | Người bán Shopee Mall có trách nhiệm phản hồi yêu cầu hoàn tiền ngay trong vòng 02 ngày lịch. |
 
-**Bao nhiêu câu hỏi trả về chunk có liên quan trong top-3?** **5 / 5** câu (100%)
+**Bao nhiêu câu hỏi trả về chunk có liên quan trong top-3?** **4 / 5** câu (**80%** Retrieval Doc Hit Rate).
 
 **Điều hay nhất tôi học được từ thành viên khác / nhóm khác (qua demo):**
-> Qua việc chạy benchmark thực tế trên 5 query chung của nhóm, chiến lược `SentenceChunker` (3 câu/chunk) bảo toàn được tính nguyên vẹn của từng điều khoản chính sách và mốc thời gian (24 giờ, 02 ngày, 7-14 ngày). Đồng thời, bộ lọc `metadata_filter={"audience": "seller"}` ở Query 5 giúp loại trừ hoàn toàn các tài liệu hướng dẫn của người mua, đưa văn bản nghĩa vụ của người bán lên vị trí Top-1 chính xác tuyệt đối.
+> 1. **Hiệu quả của `SentenceChunker`:** Tỷ lệ truy xuất đạt 4/5 câu (80%) trúng tài liệu chuẩn trong Top-3. Việc ngắt theo câu giúp bảo tồn nguyên vẹn các mốc thời gian quy định ("24 giờ", "02 ngày", "15 ngày") mà không bị đứt đoạn giữa chừng như phương pháp cắt cứng `FixedSizeChunker`.
+> 2. **Bài học về phân phối từ khóa:** Ở Query 4, các cụm từ phổ biến như "hoàn tiền", "chấp nhận", "sau khi" xuất hiện với mật độ cao trong tài liệu điều kiện đã vô tình lấn át từ khóa thanh toán đặc thù ("thẻ tín dụng/ghi nợ"), khiến tài liệu mốc thời gian hoàn tiền bị đẩy ra ngoài Top-3. Điều này cho thấy tầm quan trọng của việc xử lý stop words theo miền chuyên ngành trong RAG.
+> 3. **Giá trị của Metadata Filtering:** Bài kiểm tra A/B ở Query 5 đã minh chứng vai trò tối quan trọng của trường `audience="seller"`. Nếu không có bộ lọc, kết quả Top-1 sẽ trả về tài liệu của người mua (`buyer-return-conditions`), nhưng khi kích hoạt bộ lọc, hệ thống đã loại bỏ 100% nhiễu và trả về chuẩn xác văn bản nghĩa vụ của người bán.
 
 ---
 
