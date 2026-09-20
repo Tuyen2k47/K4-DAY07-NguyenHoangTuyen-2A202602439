@@ -9,6 +9,7 @@ import os
 LOCAL_EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
 GEMINI_EMBEDDING_MODEL = "gemini-embedding-001"
+OLLAMA_EMBEDDING_MODEL = "llama3.1:latest"
 EMBEDDING_PROVIDER_ENV = "EMBEDDING_PROVIDER"
 
 
@@ -28,6 +29,31 @@ class MockEmbedder:
             vector.append((seed / 0xFFFFFFFF) * 2 - 1)
         norm = math.sqrt(sum(value * value for value in vector)) or 1.0
         return [value / norm for value in vector]
+
+
+class OllamaEmbedder:
+    """Ollama API-backed local embedder with fallback."""
+
+    def __init__(self, model_name: str = OLLAMA_EMBEDDING_MODEL, host: str = "http://localhost:11434") -> None:
+        self.model_name = model_name
+        self.host = host.rstrip("/")
+        self._fallback = MockEmbedder()
+        self._backend_name = f"ollama ({model_name})"
+
+    def __call__(self, text: str) -> list[float]:
+        import json
+        import urllib.request
+
+        prompt_text = text[:2000] if len(text) > 2000 else text
+        url = f"{self.host}/api/embeddings"
+        payload = json.dumps({"model": self.model_name, "prompt": prompt_text}).encode("utf-8")
+        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                return [float(v) for v in data["embedding"]]
+        except Exception:
+            return self._fallback(text)
 
 
 class LocalEmbedder:
